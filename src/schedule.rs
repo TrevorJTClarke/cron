@@ -31,10 +31,8 @@ impl Schedule {
         }
     }
 
-    fn next_after<Z>(&self, after: &DateTime<Z>) -> Option<DateTime<Z>>
-    where
-        Z: TimeZone,
-    {
+    #[allow(dead_code)]
+    fn next_duration(&self, after: &i64) -> Option<i64> {
         let mut query = NextAfterQuery::from(after);
         for year in self
             .fields
@@ -86,7 +84,8 @@ impl Schedule {
                                 (Included(second_start), Included(Seconds::inclusive_max()));
 
                             for second in self.fields.seconds.ordinals().range(second_range).cloned() {
-                                let timezone = after.timezone();
+                                // let timezone = after.timezone();
+                                let timezone = Utc.timestamp(after.clone(), 0).timezone();
                                 let candidate = if let Some(candidate) = timezone
                                     .ymd(year as i32, month, day_of_month)
                                     .and_hms_opt(hour, minute, second)
@@ -103,7 +102,7 @@ impl Schedule {
                                 {
                                     continue 'day_loop;
                                 }
-                                return Some(candidate);
+                                return Some(candidate.timestamp_nanos());
                             }
                             query.reset_minute();
                         } // End of minutes range
@@ -119,120 +118,110 @@ impl Schedule {
         None
     }
 
-    fn prev_from<Z>(&self, before: &DateTime<Z>) -> Option<DateTime<Z>>
-    where
-        Z: TimeZone,
-    {
-        let mut query = PrevFromQuery::from(before);
-        for year in self
-            .fields
-            .years
-            .ordinals()
-            .range((Unbounded, Included(query.year_upper_bound())))
-            .rev()
-            .cloned()
-        {
-            let month_start = query.month_upper_bound();
+    // fn next_after<Z>(&self, after: &DateTime<Z>) -> Option<DateTime<Z>>
+    // where
+    //     Z: TimeZone,
+    // {
+    //     let mut query = NextAfterQuery::from(after);
+    //     for year in self
+    //         .fields
+    //         .years
+    //         .ordinals()
+    //         .range((Included(query.year_lower_bound()), Unbounded))
+    //         .cloned()
+    //     {
+    //         let month_start = query.month_lower_bound();
+    //         if !self.fields.months.ordinals().contains(&month_start) {
+    //             query.reset_month();
+    //         }
+    //         let month_range = (Included(month_start), Included(Months::inclusive_max()));
+    //         for month in self.fields.months.ordinals().range(month_range).cloned() {
+    //             let day_of_month_start = query.day_of_month_lower_bound();
+    //             if !self.fields.days_of_month.ordinals().contains(&day_of_month_start) {
+    //                 query.reset_day_of_month();
+    //             }
+    //             let day_of_month_end = days_in_month(month, year);
+    //             let day_of_month_range = (Included(day_of_month_start), Included(day_of_month_end));
 
-            if !self.fields.months.ordinals().contains(&month_start) {
-                query.reset_month();
-            }
-            let month_range = (Included(Months::inclusive_min()), Included(month_start));
+    //             'day_loop: for day_of_month in self
+    //                 .fields
+    //                 .days_of_month
+    //                 .ordinals()
+    //                 .range(day_of_month_range)
+    //                 .cloned()
+    //             {
+    //                 let hour_start = query.hour_lower_bound();
+    //                 if !self.fields.hours.ordinals().contains(&hour_start) {
+    //                     query.reset_hour();
+    //                 }
+    //                 let hour_range = (Included(hour_start), Included(Hours::inclusive_max()));
 
-            for month in self.fields.months.ordinals().range(month_range).rev().cloned() {
-                let day_of_month_end = query.day_of_month_upper_bound();
-                if !self.fields.days_of_month.ordinals().contains(&day_of_month_end) {
-                    query.reset_day_of_month();
-                }
+    //                 for hour in self.fields.hours.ordinals().range(hour_range).cloned() {
+    //                     let minute_start = query.minute_lower_bound();
+    //                     if !self.fields.minutes.ordinals().contains(&minute_start) {
+    //                         query.reset_minute();
+    //                     }
+    //                     let minute_range =
+    //                         (Included(minute_start), Included(Minutes::inclusive_max()));
 
-                let day_of_month_end = days_in_month(month, year).min(day_of_month_end);
+    //                     for minute in self.fields.minutes.ordinals().range(minute_range).cloned() {
+    //                         let second_start = query.second_lower_bound();
+    //                         if !self.fields.seconds.ordinals().contains(&second_start) {
+    //                             query.reset_second();
+    //                         }
+    //                         let second_range =
+    //                             (Included(second_start), Included(Seconds::inclusive_max()));
 
-                let day_of_month_range = (
-                    Included(DaysOfMonth::inclusive_min()),
-                    Included(day_of_month_end),
-                );
+    //                         for second in self.fields.seconds.ordinals().range(second_range).cloned() {
+    //                             let timezone = after.timezone();
+    //                             let candidate = if let Some(candidate) = timezone
+    //                                 .ymd(year as i32, month, day_of_month)
+    //                                 .and_hms_opt(hour, minute, second)
+    //                             {
+    //                                 candidate
+    //                             } else {
+    //                                 continue;
+    //                             };
+    //                             if !self
+    //                                 .fields
+    //                                 .days_of_week
+    //                                 .ordinals()
+    //                                 .contains(&candidate.weekday().number_from_sunday())
+    //                             {
+    //                                 continue 'day_loop;
+    //                             }
+    //                             return Some(candidate);
+    //                         }
+    //                         query.reset_minute();
+    //                     } // End of minutes range
+    //                     query.reset_hour();
+    //                 } // End of hours range
+    //                 query.reset_day_of_month();
+    //             } // End of Day of Month range
+    //             query.reset_month();
+    //         } // End of Month range
+    //     }
 
-                'day_loop: for day_of_month in self
-                    .fields
-                    .days_of_month
-                    .ordinals()
-                    .range(day_of_month_range)
-                    .rev()
-                    .cloned()
-                {
-                    let hour_start = query.hour_upper_bound();
-                    if !self.fields.hours.ordinals().contains(&hour_start) {
-                        query.reset_hour();
-                    }
-                    let hour_range = (Included(Hours::inclusive_min()), Included(hour_start));
+    //     // We ran out of dates to try.
+    //     None
+    // }
 
-                    for hour in self.fields.hours.ordinals().range(hour_range).rev().cloned() {
-                        let minute_start = query.minute_upper_bound();
-                        if !self.fields.minutes.ordinals().contains(&minute_start) {
-                            query.reset_minute();
-                        }
-                        let minute_range =
-                            (Included(Minutes::inclusive_min()), Included(minute_start));
+    // /// Provides an iterator which will return each DateTime that matches the schedule starting with
+    // /// the current time if applicable.
+    // pub fn upcoming<Z>(&self, timezone: Z) -> ScheduleIterator<Z>
+    // where
+    //     Z: TimeZone,
+    // {
+    //     self.after(&timezone.from_utc_datetime(&Utc::now().naive_utc()))
+    // }
 
-                        for minute in self.fields.minutes.ordinals().range(minute_range).rev().cloned() {
-                            let second_start = query.second_upper_bound();
-                            if !self.fields.seconds.ordinals().contains(&second_start) {
-                                query.reset_second();
-                            }
-                            let second_range =
-                                (Included(Seconds::inclusive_min()), Included(second_start));
-
-                            for second in self.fields.seconds.ordinals().range(second_range).rev().cloned()
-                            {
-                                let timezone = before.timezone();
-                                let candidate = if let Some(candidate) = timezone
-                                    .ymd(year as i32, month, day_of_month)
-                                    .and_hms_opt(hour, minute, second)
-                                {
-                                    candidate
-                                } else {
-                                    continue;
-                                };
-                                if !self
-                                    .fields
-                                    .days_of_week
-                                    .ordinals()
-                                    .contains(&candidate.weekday().number_from_sunday())
-                                {
-                                    continue 'day_loop;
-                                }
-                                return Some(candidate);
-                            }
-                            query.reset_minute();
-                        } // End of minutes range
-                        query.reset_hour();
-                    } // End of hours range
-                    query.reset_day_of_month();
-                } // End of Day of Month range
-                query.reset_month();
-            } // End of Month range
-        }
-
-        // We ran out of dates to try.
-        None
-    }
-
-    /// Provides an iterator which will return each DateTime that matches the schedule starting with
-    /// the current time if applicable.
-    pub fn upcoming<Z>(&self, timezone: Z) -> ScheduleIterator<Z>
-    where
-        Z: TimeZone,
-    {
-        self.after(&timezone.from_utc_datetime(&Utc::now().naive_utc()))
-    }
-
-    /// Like the `upcoming` method, but allows you to specify a start time other than the present.
-    pub fn after<Z>(&self, after: &DateTime<Z>) -> ScheduleIterator<Z>
-    where
-        Z: TimeZone,
-    {
-        ScheduleIterator::new(self, after)
-    }
+    // /// Like the `upcoming` method, but allows you to specify a start time other than the present.
+    // pub fn after<Z>(&self, after: &DateTime<Z>) -> ScheduleIterator<Z>
+    // where
+    //     Z: TimeZone,
+    // {
+    //     ScheduleIterator::new(self, after)
+    // }
 
     pub fn includes<Z>(&self, date_time: DateTime<Z>) -> bool
     where
@@ -339,67 +328,48 @@ impl ScheduleFields {
     }
 }
 
-pub struct ScheduleIterator<'a, Z>
-where
-    Z: TimeZone,
-{
-    is_done: bool,
-    schedule: &'a Schedule,
-    previous_datetime: DateTime<Z>,
-}
-//TODO: Cutoff datetime?
+// pub struct ScheduleIterator<'a, Z>
+// where
+//     Z: TimeZone,
+// {
+//     is_done: bool,
+//     schedule: &'a Schedule,
+//     previous_datetime: DateTime<Z>,
+// }
+// //TODO: Cutoff datetime?
 
-impl<'a, Z> ScheduleIterator<'a, Z>
-where
-    Z: TimeZone,
-{
-    fn new(schedule: &'a Schedule, starting_datetime: &DateTime<Z>) -> ScheduleIterator<'a, Z> {
-        ScheduleIterator {
-            is_done: false,
-            schedule,
-            previous_datetime: starting_datetime.clone(),
-        }
-    }
-}
+// impl<'a, Z> ScheduleIterator<'a, Z>
+// where
+//     Z: TimeZone,
+// {
+//     fn new(schedule: &'a Schedule, starting_datetime: &DateTime<Z>) -> ScheduleIterator<'a, Z> {
+//         ScheduleIterator {
+//             is_done: false,
+//             schedule,
+//             previous_datetime: starting_datetime.clone(),
+//         }
+//     }
+// }
 
-impl<'a, Z> Iterator for ScheduleIterator<'a, Z>
-where
-    Z: TimeZone,
-{
-    type Item = DateTime<Z>;
+// impl<'a, Z> Iterator for ScheduleIterator<'a, Z>
+// where
+//     Z: TimeZone,
+// {
+//     type Item = DateTime<Z>;
 
-    fn next(&mut self) -> Option<DateTime<Z>> {
-        if self.is_done {
-            return None;
-        }
-        if let Some(next_datetime) = self.schedule.next_after(&self.previous_datetime) {
-            self.previous_datetime = next_datetime.clone();
-            Some(next_datetime)
-        } else {
-            self.is_done = true;
-            None
-        }
-    }
-}
-
-impl<'a, Z> DoubleEndedIterator for ScheduleIterator<'a, Z>
-where
-    Z: TimeZone,
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.is_done {
-            return None;
-        }
-
-        if let Some(prev_datetime) = self.schedule.prev_from(&self.previous_datetime) {
-            self.previous_datetime = prev_datetime.clone();
-            Some(prev_datetime)
-        } else {
-            self.is_done = true;
-            None
-        }
-    }
-}
+//     fn next(&mut self) -> Option<DateTime<Z>> {
+//         if self.is_done {
+//             return None;
+//         }
+//         if let Some(next_datetime) = self.schedule.next_after(&self.previous_datetime) {
+//             self.previous_datetime = next_datetime.clone();
+//             Some(next_datetime)
+//         } else {
+//             self.is_done = true;
+//             None
+//         }
+//     }
+// }
 
 fn is_leap_year(year: Ordinal) -> bool {
     let by_four = year % 4 == 0;
@@ -424,90 +394,69 @@ mod test {
     use std::str::{FromStr};
 
     #[test]
-    fn test_next_and_prev_from() {
+    fn test_next_duration() {
         let expression = "0 5,13,40-42 17 1 Jan *";
         let schedule = Schedule::from_str(expression).unwrap();
-
-        let next = schedule.next_after(&Utc::now());
-        println!("NEXT AFTER for {} {:?}", expression, next);
-        assert!(next.is_some());
-
-        let next2 = schedule.next_after(&next.unwrap());
-        println!("NEXT2 AFTER for {} {:?}", expression, next2);
-        assert!(next2.is_some());
-
-        let prev = schedule.prev_from(&next2.unwrap());
-        println!("PREV FROM for {} {:?}", expression, prev);
-        assert!(prev.is_some());
-        assert_eq!(prev, next);
-    }
-
-    #[test]
-    fn test_prev_from() {
-        let expression = "0 5,13,40-42 17 1 Jan *";
-        let schedule = Schedule::from_str(expression).unwrap();
-        let prev = schedule.prev_from(&Utc::now());
-        println!("PREV FROM for {} {:?}", expression, prev);
-        assert!(prev.is_some());
-    }
-
-    #[test]
-    fn test_next_after() {
-        let expression = "0 5,13,40-42 17 1 Jan *";
-        let schedule = Schedule::from_str(expression).unwrap();
-        let next = schedule.next_after(&Utc::now());
-        println!("NEXT AFTER for {} {:?}", expression, next);
+        let next = schedule.next_duration(&Utc::now().timestamp_nanos());
+        println!("NEXT DURATION------- for {} {:?}", expression, next);
         assert!(next.is_some());
     }
 
-    #[test]
-    fn test_upcoming_utc() {
-        let expression = "0 0,30 0,6,12,18 1,15 Jan-March Thurs";
-        let schedule = Schedule::from_str(expression).unwrap();
-        let mut upcoming = schedule.upcoming(Utc);
-        let next1 = upcoming.next();
-        assert!(next1.is_some());
-        let next2 = upcoming.next();
-        assert!(next2.is_some());
-        let next3 = upcoming.next();
-        assert!(next3.is_some());
-        println!("Upcoming 1 for {} {:?}", expression, next1);
-        println!("Upcoming 2 for {} {:?}", expression, next2);
-        println!("Upcoming 3 for {} {:?}", expression, next3);
-    }
+    // #[test]
+    // fn test_next_and_prev_from() {
+    //     let expression = "0 5,13,40-42 17 1 Jan *";
+    //     let schedule = Schedule::from_str(expression).unwrap();
 
-    #[test]
-    fn test_upcoming_rev_utc() {
-        let expression = "0 0,30 0,6,12,18 1,15 Jan-March Thurs";
-        let schedule = Schedule::from_str(expression).unwrap();
-        let mut upcoming = schedule.upcoming(Utc).rev();
-        let prev1 = upcoming.next();
-        assert!(prev1.is_some());
-        let prev2 = upcoming.next();
-        assert!(prev2.is_some());
-        let prev3 = upcoming.next();
-        assert!(prev3.is_some());
-        println!("Prev Upcoming 1 for {} {:?}", expression, prev1);
-        println!("Prev Upcoming 2 for {} {:?}", expression, prev2);
-        println!("Prev Upcoming 3 for {} {:?}", expression, prev3);
-    }
+    //     let next = schedule.next_after(&Utc::now());
+    //     println!("NEXT AFTER for {} {:?}", expression, next);
+    //     assert!(next.is_some());
 
-    #[test]
-    fn test_upcoming_local() {
-        use chrono::Local;
-        let expression = "0 0,30 0,6,12,18 1,15 Jan-March Thurs";
-        let schedule = Schedule::from_str(expression).unwrap();
-        let mut upcoming = schedule.upcoming(Local);
-        let next1 = upcoming.next();
-        assert!(next1.is_some());
-        let next2 = upcoming.next();
-        assert!(next2.is_some());
-        let next3 = upcoming.next();
-        assert!(next3.is_some());
-        println!("Upcoming 1 for {} {:?}", expression, next1);
-        println!("Upcoming 2 for {} {:?}", expression, next2);
-        println!("Upcoming 3 for {} {:?}", expression, next3);
-    }
+    //     let next2 = schedule.next_after(&next.unwrap());
+    //     println!("NEXT2 AFTER for {} {:?}", expression, next2);
+    //     assert!(next2.is_some());
+    // }
+
+    // #[test]
+    // fn test_next_after() {
+    //     let expression = "0 5,13,40-42 17 1 Jan *";
+    //     let schedule = Schedule::from_str(expression).unwrap();
+    //     let next = schedule.next_after(&Utc::now());
+    //     println!("NEXT AFTER for {} {:?}", expression, next);
+    //     assert!(next.is_some());
+    // }
+
+    // #[test]
+    // fn test_upcoming_utc() {
+    //     let expression = "0 0,30 0,6,12,18 1,15 Jan-March Thurs";
+    //     let schedule = Schedule::from_str(expression).unwrap();
+    //     let mut upcoming = schedule.upcoming(Utc);
+    //     let next1 = upcoming.next();
+    //     assert!(next1.is_some());
+    //     let next2 = upcoming.next();
+    //     assert!(next2.is_some());
+    //     let next3 = upcoming.next();
+    //     assert!(next3.is_some());
+    //     println!("Upcoming 1 for {} {:?}", expression, next1);
+    //     println!("Upcoming 2 for {} {:?}", expression, next2);
+    //     println!("Upcoming 3 for {} {:?}", expression, next3);
+    // }
+
+    // #[test]
+    // fn test_upcoming_local() {
+    //     use chrono::Local;
+    //     let expression = "0 0,30 0,6,12,18 1,15 Jan-March Thurs";
+    //     let schedule = Schedule::from_str(expression).unwrap();
+    //     let mut upcoming = schedule.upcoming(Local);
+    //     let next1 = upcoming.next();
+    //     assert!(next1.is_some());
+    //     let next2 = upcoming.next();
+    //     assert!(next2.is_some());
+    //     let next3 = upcoming.next();
+    //     assert!(next3.is_some());
+    //     println!("Upcoming 1 for {} {:?}", expression, next1);
+    //     println!("Upcoming 2 for {} {:?}", expression, next2);
+    //     println!("Upcoming 3 for {} {:?}", expression, next3);
+    // }
 
     #[test]
     fn test_schedule_to_string() {
@@ -539,37 +488,21 @@ mod test {
         assert!(schedule.is_err());
     }
 
-    #[test]
-    fn test_no_panic_on_nonexistent_time_after() {
-        use chrono::offset::TimeZone;
-        use chrono_tz::Tz;
+    // #[test]
+    // fn test_no_panic_on_nonexistent_time_after() {
+    //     use chrono::offset::TimeZone;
+    //     use chrono_tz::Tz;
 
-        let schedule_tz: Tz = "Europe/London".parse().unwrap();
-        let dt = schedule_tz
-            .ymd(2019, 10, 27)
-            .and_hms(0, 3, 29)
-            .checked_add_signed(chrono::Duration::hours(1)) // puts it in the middle of the DST transition
-            .unwrap();
-        let schedule = Schedule::from_str("* * * * * Sat,Sun *").unwrap();
-        let next = schedule.after(&dt).next().unwrap();
-        assert!(next > dt); // test is ensuring line above does not panic
-    }
-
-    #[test]
-    fn test_no_panic_on_nonexistent_time_before() {
-        use chrono::offset::TimeZone;
-        use chrono_tz::Tz;
-
-        let schedule_tz: Tz = "Europe/London".parse().unwrap();
-        let dt = schedule_tz
-            .ymd(2019, 10, 27)
-            .and_hms(0, 3, 29)
-            .checked_add_signed(chrono::Duration::hours(1)) // puts it in the middle of the DST transition
-            .unwrap();
-        let schedule = Schedule::from_str("* * * * * Sat,Sun *").unwrap();
-        let prev = schedule.after(&dt).rev().next().unwrap();
-        assert!(prev < dt); // test is ensuring line above does not panic
-    }
+    //     let schedule_tz: Tz = "Europe/London".parse().unwrap();
+    //     let dt = schedule_tz
+    //         .ymd(2019, 10, 27)
+    //         .and_hms(0, 3, 29)
+    //         .checked_add_signed(chrono::Duration::hours(1)) // puts it in the middle of the DST transition
+    //         .unwrap();
+    //     let schedule = Schedule::from_str("* * * * * Sat,Sun *").unwrap();
+    //     let next = schedule.after(&dt).next().unwrap();
+    //     assert!(next > dt); // test is ensuring line above does not panic
+    // }
     
     #[test]
     fn test_time_unit_spec_equality() {
